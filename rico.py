@@ -4,10 +4,19 @@ import global_var
 import random
 import matplotlib.pyplot as plt
 
-#Raiz quarta do número de simulações à serem feitas
+import keras
+from keras.layers import Activation
+from keras import backend, losses
+from keras.layers import Dense, Dropout, Flatten
+from keras.models import Sequential
+from keras.layers.normalization import BatchNormalization
+from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+from keras.models import load_model
+
+#Preparing the data
+"""
 N = global_var.N
 M = global_var.M
-#Abrindo arquivo com os dados
 
 data = h5py.File('stochastic_heston.h5','r')
 data.require_dataset("Heston",((20*N**4),1001,2),dtype='float32')
@@ -20,29 +29,22 @@ print(shuffled_data[1,...])
 #ser adivinhados, como também os que devem ser treinados e os que devem ser testados
 x_train,y_train = shuffled_data[:int(0.85*M),900:950,:], shuffled_data[:int(0.85*M),950:952,0]
 x_test,y_test = shuffled_data[int(0.85*M):,900:950,:], shuffled_data[int(0.85*M):,950:952,0]
+"""
 
-# %%
-import keras
-from keras.layers import Activation
-from keras import backend
-from keras.utils.generic_utils import get_custom_objects
-from keras.layers import Dense,Dropout,Flatten
-from keras.models import Sequential
-from keras import losses
-from keras.layers.advanced_activations import PReLU
-from keras.layers.normalization import BatchNormalization
-from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
-from scipy.optimize import differential_evolution
-from keras.models import load_model
+#Preparing the neural network
 
 keras.backend.set_floatx('float32')
 
 model = Sequential()
 
+#Entering analyzing 50 steps in the past, using the values of the
+#return and the volatility
 model.add(BatchNormalization(input_shape = (50,2)))
 
+#Trasforming the input data in 1D
 model.add(Flatten())
 
+#Hidden Layers
 model.add(Dense(
         units = 500,
         activation = 'relu',
@@ -80,31 +82,21 @@ model.add(Dense(
         ))
 
 #model = load_model("HestonModel.h5")
+
+#Checking the model
 model.summary()
 
 # %%
 
+#Compiling the model
+model.compile(loss = "mse", optimizer = "adam")
 
-model.compile(loss = "mae", optimizer = "adam")
-
-es = EarlyStopping(monitor="val_loss",mode="min",patience=300,)
+#Checking the model status with EarlyStopping and ReduceLROnPlateau
+es = EarlyStopping(monitor="val_loss",mode="min",patience=50,)
 lr = ReduceLROnPlateau(min_lr=0.00001,factor=0.2,patience=10)
 
+#Fitting the model
 model.fit(y=y_train,x=x_train, batch_size=20, validation_data=(x_test,y_test),epochs=200,verbose=2,shuffle=1,callbacks=[es,lr])
 
+#Saving the model
 model.save('HestonModel.h5')
-
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('model loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
-
-# ## Store/Load optimal NN parameteres
-# %%
-
-np.savetxt("y_test.dat",y_test)
-np.savetxt("x_test.dat",x_test)
-# %%
